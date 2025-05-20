@@ -3,6 +3,8 @@
 
 #include "FtpClientCJJ.h"
 
+bool readYN();
+
 void printMenu(FTPClient *client);
 void configure(FTPClient *client);
 bool handleMenu(FTPClient *client);

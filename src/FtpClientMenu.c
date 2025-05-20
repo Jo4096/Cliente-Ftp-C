@@ -1,5 +1,18 @@
 #include "FtpClientMenu.h"
 
+bool readYN()
+{
+    char yn = '\0';
+    do
+    {
+        scanf(" %c", &yn);
+        while (getchar() != '\n')
+            ;
+    } while (yn != 'y' && yn != 'Y' && yn != 'n' && yn != 'N');
+
+    return yn == 'y' || yn == 'Y';
+}
+
 void printMenu(FTPClient *client)
 {
     printf("\n---------------FTP_CLIENT--------------\n");
@@ -208,14 +221,8 @@ bool handleMenu(FTPClient *client)
         }
 
         StrCJJ_print(client->filename, "[CLI]: Olha o filename é: '", "' queres mudar? [y/n]\n>");
-        char yn = '\0';
-        do
-        {
-            scanf(" %c", &yn);
-            while (getchar() != '\n')
-                ;
-        } while (yn != 'y' && yn != 'Y' && yn != 'n' && yn != 'N');
-        if (yn == 'y' || yn == 'Y')
+
+        if (readYN())
         {
             StrCJJ_free(client->filename);
             printf("Novo filename: ");
@@ -243,6 +250,12 @@ bool handleMenu(FTPClient *client)
         printf("[CLI]: Desconectado\n");
         break;
     case 7:
+        printf("[CLI]: Queres mesmo sair?[y/n]\n>");
+        if (!readYN())
+        {
+            choice = 0;
+        }
+
         break;
     default:
         printf("[CLI]: INPUT INVALIDO PA\n");
@@ -265,8 +278,11 @@ void app(const char *URL)
     {
         printMenu(client);
         running = handleMenu(client);
-        printf("Pressiona algo para continuar...");
-        getc(stdin);
+        if (running)
+        {
+            printf("Pressiona algo para continuar...");
+            getc(stdin);
+        }
     }
 
     FTPClient_destroy(client);
