@@ -111,7 +111,7 @@ void configure(FTPClient *client)
     while (getchar() != '\n')
         ;
     StrCJJ *urlPathInput = StrCJJ_input(512);
-    if (urlPathInput->str[0] != '\0')
+    if (strlen(urlPathInput->str) != 0)
     {
         if (client->urlPath)
         {
