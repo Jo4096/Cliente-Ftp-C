@@ -108,6 +108,8 @@ void configure(FTPClient *client)
 
     // URL Path (opcional, pode ser configurado aqui ou inferido)
     printf("[CLI]: (Opcional) Insira o Path da URL (ex: /pub/file.txt): ");
+    while (getchar() != '\n')
+        ;
     StrCJJ *urlPathInput = StrCJJ_input(512);
     if (urlPathInput->str[0] != '\0')
     {
