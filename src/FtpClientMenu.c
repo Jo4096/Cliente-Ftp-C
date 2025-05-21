@@ -222,7 +222,8 @@ bool handleMenu(FTPClient *client)
             break;
         }
 
-        StrCJJ_print(client->filename, "[CLI]: Olha o filename é: '", "' queres mudar? [y/n]\n>");
+        StrCJJ_print(client->filename, "[CLI]: Olha o filename é: '", "' queres mudar? [y/n]");
+        printf(">");
 
         if (readYN())
         {
