@@ -1,5 +1,58 @@
 #include "FtpClientCJJ.h"
 
+static bool create_directories(const char *path)
+{
+    char *pp;
+    char *slash;
+    bool status = true;
+    int len;
+
+    // Make a mutable copy of the path
+    char *path_copy = strdup(path);
+    if (path_copy == NULL)
+    {
+        perror("Erro ao alocar memória para o caminho do diretório");
+        return false;
+    }
+
+    len = strlen(path_copy);
+    if (len == 0)
+    {
+        free(path_copy);
+        return true; // Nothing to create
+    }
+
+    pp = path_copy;
+    if (path_copy[0] == '/')
+    { // Handle absolute paths
+        pp++;
+    }
+    else if (path_copy[0] == '~')
+    { // Handle ~ (home directory) if needed, but not common for FTP downloads directly
+      // For simplicity, we won't expand ~ here. If needed, you'd get the home dir.
+      // For now, treat ~ as a literal directory name or expect absolute paths.
+    }
+
+    while ((slash = strchr(pp, '/')) != NULL)
+    {
+        *slash = '\0'; // Temporarily null-terminate to create one directory at a time
+        if (mkdir(path_copy, 0755) != 0)
+        { // 0755 permissions (rwx for owner, rx for group/others)
+            if (errno != EEXIST)
+            { // If it's not just that the directory already exists
+                perror("Erro ao criar diretório");
+                status = false;
+                break;
+            }
+        }
+        *slash = '/'; // Restore the slash
+        pp = slash + 1;
+    }
+
+    free(path_copy);
+    return status;
+}
+
 bool parse_ip_part(const char *part_str, uint8_t *out)
 {
     char *endptr;
@@ -41,9 +94,9 @@ FTPClient *FTPClient_create(const char *ftpUrl)
 
     client->host = NULL;
     client->ip = NULL;
-    client->port = 21;                         // Porta FTP padrão
-    client->user = StrCJJ_create("anonymous"); // Usuário padrão
-    client->password = StrCJJ_create("guest"); // Senha padrão
+    client->port = 21;                             // Porta FTP padrão
+    client->user = StrCJJ_create("anonymous");     // Usuário padrão
+    client->password = StrCJJ_create("anonymous"); // Senha padrão
     client->urlPath = StrCJJ_create("Nao ha path de momento");
     client->filename = StrCJJ_create("no file selected");
     client->responseBuffer = StrCJJ_create("");
@@ -370,7 +423,7 @@ bool FTPClient_enterPassiveMode(FTPClient *client)
         return false;
     }
 
-    if (!StrCJJ_startsWith(client->responseBuffer, "227 "))
+    if (!StrCJJ_startsWith(client->responseBuffer, "227"))
     {
         fprintf(stderr, "Erro: Falha ao entrar no modo passivo. Resposta: %s\n", client->responseBuffer->str);
         return false;
@@ -481,16 +534,10 @@ bool FTPClient_downloadFile(FTPClient *client)
         client->dataSocket = -1;
         return false;
     }
+
     memset(data_addr.sin_zero, 0, sizeof(data_addr.sin_zero));
 
-    /*if (connect(client->dataSocket, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
-    {
-        perror("Erro ao conectar socket de dados");
-        close(client->dataSocket);
-        client->dataSocket = -1;
-        return false;
-    }*/
-    if (connect_with_timeout(client->dataSocket, (struct sockaddr *)&data_addr, sizeof(data_addr), TIMEOUT) < 0)
+    if (connect_with_timeout(client->dataSocket, (struct sockaddr *)&data_addr, sizeof(data_addr), TIMEOUT) < 0) //
     {
         perror("Erro ao conectar socket de dados");
         close(client->dataSocket);
@@ -498,7 +545,48 @@ bool FTPClient_downloadFile(FTPClient *client)
         return false;
     }
 
-    // Enviar comando RETR para pedir o ficheiro
+    if (!FTPClient_sendCommand(client->controlSocket, "TYPE I\r\n", client))
+    {
+        printf("Erro ao definir modo de transferência para binário\n");
+        close(client->dataSocket);
+        client->dataSocket = -1;
+        return false;
+    }
+    if (!FTPClient_receiveResponse(client->controlSocket, client))
+    {
+        printf("Erro ao receber resposta do comando TYPE I\n");
+        close(client->dataSocket);
+        client->dataSocket = -1;
+        return false;
+    }
+
+    if (!StrCJJ_startsWith(client->responseBuffer, "200"))
+    {
+        fprintf(stderr, "Erro: Servidor não aceitou TYPE I. Resposta: %s\n", client->responseBuffer->str);
+        close(client->dataSocket);
+        client->dataSocket = -1;
+        return false;
+    }
+
+    // --- NEW LOGIC: Create directories if they don't exist ---
+    StrCJJ *full_local_path_str = StrCJJ_create(client->filename->str);
+    StrCJJ *dirname_str = StrCJJ_dirname(full_local_path_str); // Get the directory part
+    StrCJJ_free(full_local_path_str);                          // Free the temporary string
+
+    if (dirname_str && dirname_str->len > 0)
+    {
+        if (!create_directories(dirname_str->str))
+        {
+            fprintf(stderr, "Erro ao criar diretórios para o caminho local: %s\n", dirname_str->str);
+            StrCJJ_free(dirname_str);
+            close(client->dataSocket);
+            client->dataSocket = -1;
+            return false;
+        }
+    }
+    StrCJJ_free(dirname_str); // Free the directory string after use
+    // --- END NEW LOGIC ---
+
     StrCJJ *retrCmd = StrCJJ_create("");
     StrCJJ_print(client->filename, "Filename: ", "\n");
     StrCJJ_appendFormat(retrCmd, "RETR %s\r\n", client->filename->str);
@@ -514,7 +602,6 @@ bool FTPClient_downloadFile(FTPClient *client)
         return false;
     }
 
-    // Normalmente, o servidor responde com 150 para iniciar transferência
     if (!StrCJJ_startsWith(client->responseBuffer, "150"))
     {
         fprintf(stderr, "Erro ao iniciar transferência do ficheiro: %s\n", client->responseBuffer->str);
@@ -540,7 +627,6 @@ bool FTPClient_downloadFile(FTPClient *client)
     close(client->dataSocket);
     client->dataSocket = -1;
 
-    // Ler resposta final do servidor depois da transferência
     if (!FTPClient_receiveResponse(client->controlSocket, client))
     {
         return false;
@@ -548,7 +634,7 @@ bool FTPClient_downloadFile(FTPClient *client)
 
     if (!StrCJJ_startsWith(client->responseBuffer, "226"))
     {
-        fprintf(stderr, "Transferência pode não ter sido concluída corretamente: %s\n", client->responseBuffer->str);
+        fprintf(stderr, "Transferência pode não ter sido concluída corretamente: %s\n", client->responseBuffer->str); //
         return false;
     }
 
@@ -661,7 +747,7 @@ bool FTPClient_list(FTPClient *client, const char *pathname)
         return false;
     }
 
-    if (!StrCJJ_startsWith(client->responseBuffer, "150 "))
+    if (!StrCJJ_startsWith(client->responseBuffer, "150"))
     {
         fprintf(stderr, "Erro ao solicitar lista de ficheiros: %s\n", client->responseBuffer->str);
         close(dataSocket);
@@ -693,7 +779,7 @@ bool FTPClient_list(FTPClient *client, const char *pathname)
         return false;
     }
 
-    if (!StrCJJ_startsWith(client->responseBuffer, "226 ") && !StrCJJ_startsWith(client->responseBuffer, "225 "))
+    if (!StrCJJ_startsWith(client->responseBuffer, "226") && !StrCJJ_startsWith(client->responseBuffer, "225"))
     {
         fprintf(stderr, "Erro ao finalizar lista de ficheiros: %s\n", client->responseBuffer->str);
         return false;

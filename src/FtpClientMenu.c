@@ -176,9 +176,7 @@ bool handleMenu(FTPClient *client)
         }
         else
         {
-            printf("[CLI]: Conectei me ao server...\n");
-            sleep(3);
-            printf("[CLI]:  Mentira lol, não me conectei tenta outra vez\n");
+            printf("[CLI]: Erro ao conectar ao server\n");
         }
         break;
     case 3:
@@ -193,9 +191,7 @@ bool handleMenu(FTPClient *client)
         }
         else
         {
-            printf("[CLI]: Login nao foi feito\n");
-            sleep(1);
-            printf("[CLI]:  Tenta força bruta, sei la\n");
+            printf("[CLI]: Login falhou\n");
         }
         break;
     case 4:
@@ -222,7 +218,7 @@ bool handleMenu(FTPClient *client)
             break;
         }
 
-        StrCJJ_print(client->filename, "[CLI]: Olha o filename é: '", "' queres mudar? [y/n]");
+        StrCJJ_print(client->filename, "[CLI]: O filename é: '", "' queres mudar? [y/n]");
         printf(">");
 
         if (readYN())
@@ -261,7 +257,7 @@ bool handleMenu(FTPClient *client)
 
         break;
     default:
-        printf("[CLI]: INPUT INVALIDO PA\n");
+        printf("[CLI]: INPUT INVALIDO\n");
         break;
     }
     return choice != 7;
