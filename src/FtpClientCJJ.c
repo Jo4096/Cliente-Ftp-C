@@ -1,6 +1,6 @@
 #include "FtpClientCJJ.h"
 
-static bool create_directories(const char *path)
+bool create_directories(const char *path)
 {
     char *pp;
     char *slash;

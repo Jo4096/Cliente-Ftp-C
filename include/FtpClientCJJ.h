@@ -39,7 +39,7 @@ typedef struct
 } FTPClient;
 
 FTPClient *FTPClient_create(const char *ftpUrl);
-static bool create_directories(const char *path);
+bool create_directories(const char *path);
 
 int connect_with_timeout(int sockfd, struct sockaddr *addr, socklen_t addrlen, int timeout_sec); // sugestao do gemini para dar fix ao problema
 
